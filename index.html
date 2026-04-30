@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>心情牆 | MOOD - Single File Edition</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        :root {
+            --color-background: #0F0F12;
+            --color-foreground: #E0E0E0;
+            --color-card: #1A1A1F;
+            --color-border: rgba(255, 255, 255, 0.1);
+            --color-primary: #BB86FC;
+        }
+        body {
+            background-color: var(--color-background);
+            color: var(--color-foreground);
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+        }
+        .bg-glow {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            z-index: -1;
+            overflow: hidden;
+            pointer-events: none;
+        }
+        .glow-blob {
+            position: absolute;
+            filter: blur(120px);
+            opacity: 0.12;
+            border-radius: 50%;
+            animation: pulse 10s infinite alternate;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1) translate(0, 0); }
+            100% { transform: scale(1.2) translate(5%, 5%); }
+        }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .mood-card {
+            break-inside: avoid;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+    </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        background: '#0F0F12',
+                        foreground: '#E0E0E0',
+                        card: '#1A1A1F',
+                        primary: '#BB86FC',
+                        border: 'rgba(255, 255, 255, 0.1)',
+                        muted: '#949494',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="selection:bg-primary/30 relative min-h-screen">
+    <!-- 背景裝飾 -->
+    <div class="bg-glow">
+        <div class="glow-blob w-[500px] h-[500px] bg-primary -top-48 -left-48"></div>
+        <div class="glow-blob w-[400px] h-[400px] bg-rose-500 bottom-0 -right-24"></div>
+        <div class="glow-blob w-[300px] h-[300px] bg-cyan-500 top-1/2 left-1/3 opacity-[0.08]"></div>
+    </div>
+
+    <!-- Header -->
+    <header class="px-6 md:px-12 py-8 border-b border-border flex items-center justify-between bg-background/80 backdrop-blur-md sticky top-0 z-50">
+        <div class="flex items-center gap-3 text-2xl font-extrabold tracking-tight">
+            <span class="bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent">心情牆</span>
+            <span class="bg-gradient-to-br from-primary to-rose-400 text-background px-2 py-1 rounded text-sm font-bold shadow-[0_0_15px_rgba(187,134,252,0.4)]">MOOD</span>
+        </div>
+        <button onclick="toggleModal(true)" class="bg-gradient-to-r from-primary to-indigo-500 hover:shadow-[0_0_20px_rgba(187,134,252,0.4)] text-background px-8 py-3 rounded-full font-bold transition-all active:scale-95 text-sm flex items-center gap-2">
+            <i data-lucide="plus" class="w-4 h-4"></i>
+            記錄新心情
+        </button>
+    </header>
+
+    <!-- 篩選列 -->
+    <div class="px-6 md:px-12 py-5 bg-white/[0.02] border-b border-border flex flex-col md:flex-row md:items-center justify-between gap-6 overflow-x-auto no-scrollbar">
+        <div id="category-filters" class="flex items-center gap-6">
+            <!-- 由 JS 渲染 -->
+        </div>
+
+        <div class="flex flex-wrap items-center gap-4 border-t md:border-t-0 md:border-l border-border pt-4 md:pt-0 md:pl-6">
+            <div id="status-filters" class="flex bg-white/5 p-1 rounded-lg border border-white/10">
+                <button onclick="setStatusFilter('all')" data-filter="all" class="filter-btn px-3 py-1.5 rounded-md text-xs font-bold transition-all bg-primary text-background">全部</button>
+                <button onclick="setStatusFilter('active')" data-filter="active" class="filter-btn px-3 py-1.5 rounded-md text-xs font-bold transition-all text-muted hover:text-foreground">只看 active</button>
+                <button onclick="setStatusFilter('done')" data-filter="done" class="filter-btn px-3 py-1.5 rounded-md text-xs font-bold transition-all text-muted hover:text-foreground">只看 done</button>
+            </div>
+            
+            <div class="flex items-center gap-4 px-2 text-[10px] font-mono tracking-wider uppercase">
+                <div class="flex items-center gap-1.5 bg-primary/10 px-2.5 py-1 rounded-full border border-primary/20">
+                    <span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shadow-[0_0_8px_rgba(187,134,252,0.8)]"></span>
+                    <span class="text-muted">active:</span>
+                    <span id="stat-active" class="text-primary font-bold">0</span>
+                </div>
+                <div class="flex items-center gap-1.5 bg-white/5 px-2.5 py-1 rounded-full border border-white/5">
+                    <span class="w-1.5 h-1.5 rounded-full bg-zinc-500"></span>
+                    <span class="text-muted">done:</span>
+                    <span id="stat-done" class="text-foreground font-bold">0</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主列表 -->
+    <main class="px-6 md:px-12 py-10 max-w-7xl mx-auto min-h-[60vh]">
+        <div id="mood-list" class="columns-1 md:columns-2 lg:columns-3 gap-6 space-y-6">
+            <!-- 由 JS 渲染 -->
+        </div>
+    </main>
+
+    <!-- 彈窗 -->
+    <div id="mood-modal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 hidden">
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="toggleModal(false)"></div>
+        <div class="relative w-full max-w-md bg-[#1E1E24] border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
+            <div class="h-1.5 w-full bg-gradient-to-r from-primary via-rose-400 to-indigo-500"></div>
+            <div class="p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-sm text-primary font-bold tracking-widest uppercase">匿名提交內容</h3>
+                    <button onclick="toggleModal(false)" class="text-muted hover:text-white transition-colors">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+                <div class="space-y-4">
+                    <textarea id="input-content" placeholder="在此輸入你的心情內容..." class="w-full h-24 bg-transparent border-none text-foreground placeholder:text-muted focus:outline-none resize-none font-sans"></textarea>
+                    
+                    <div class="space-y-3">
+                        <label class="text-[10px] uppercase tracking-widest text-muted font-mono">心情反應</label>
+                        <div id="modal-category-picker" class="flex flex-wrap gap-2">
+                            <!-- 由 JS 渲染 -->
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-end pt-6 border-t border-white/5">
+                        <button onclick="handleCreate()" class="bg-gradient-to-r from-primary to-rose-400 hover:shadow-[0_0_15px_rgba(187,134,252,0.4)] text-background font-bold py-2.5 px-8 rounded-xl text-xs transition-all active:scale-95 uppercase tracking-wider shadow-lg">發布</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="py-12 border-t border-border mt-20">
+        <div class="px-6 md:px-12 text-center text-muted text-xs tracking-widest uppercase font-mono">
+            © 2024 每日心情打卡 · LEVEL 2 LOCAL STORAGE 
+        </div>
+    </footer>
+
+    <script>
+        // --- 設定 ---
+        const CONFIG = {
+            STORAGE_KEY: "records",
+            CATEGORIES: ["全部", "非常好", "很好", "普通", "不好"]
+        };
+
+        let state = {
+            filterCat: "全部",
+            filterStatus: "all",
+            selectedCat: "很好"
+        };
+
+        // --- 核心函式 (依照要求命名) ---
+
+        /** 存儲資料：接受一個新記錄物件 */
+        function saveData(newRecord) {
+            const records = loadData();
+            records.unshift(newRecord);
+            localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(records));
+        }
+
+        /** 讀取資料：從 localStorage 取得陣列 */
+        function loadData() {
+            const data = localStorage.getItem(CONFIG.STORAGE_KEY);
+            return data ? JSON.parse(data) : [];
+        }
+
+        /** 渲染列表：根據目前狀態更新 DOM */
+        function renderList() {
+            const records = loadData();
+            const moodList = document.getElementById('mood-list');
+            
+            // 邏輯處理：過濾
+            let filtered = records.filter(r => {
+                const catMatch = state.filterCat === "全部" || r.category === state.filterCat;
+                const statusMatch = state.filterStatus === "all" || r.status === state.filterStatus;
+                return catMatch && statusMatch;
+            });
+
+            // 邏輯處理：排序 (active 優先)
+            filtered.sort((a, b) => {
+                if (a.status === 'active' && b.status === 'done') return -1;
+                if (a.status === 'done' && b.status === 'active') return 1;
+                return new Date(b.createdAt) - new Date(a.createdAt);
+            });
+
+            // 更新統計數
+            document.getElementById('stat-active').textContent = records.filter(r => r.status === 'active').length;
+            document.getElementById('stat-done').textContent = records.filter(r => r.status === 'done').length;
+
+            // 渲染列表
+            moodList.innerHTML = '';
+            if (filtered.length === 0) {
+                moodList.innerHTML = `<div class="col-span-full py-20 text-center text-muted italic opacity-50">這裡還沒有內容...</div>`;
+            } else {
+                filtered.forEach(item => {
+                    moodList.appendChild(createMoodCard(item));
+                });
+            }
+
+            // 更新圖標
+            lucide.createIcons();
+            renderFilters();
+        }
+
+        // --- UI 輔助函式 ---
+
+        function createMoodCard(item) {
+            const div = document.createElement('div');
+            const accentColors = {
+                "非常好": "bg-rose-500",
+                "很好": "bg-amber-500",
+                "普通": "bg-cyan-500",
+                "不好": "bg-indigo-500"
+            };
+            
+            div.className = `mood-card bg-card border rounded-2xl overflow-hidden relative ${item.status === 'done' ? 'border-border/10 opacity-60 grayscale-[0.5]' : 'border-border hover:scale-[1.01] hover:shadow-xl hover:shadow-primary/5'}`;
+            
+            div.innerHTML = `
+                <div class="h-1 w-full absolute top-0 left-0 z-10 ${accentColors[item.category] || 'bg-zinc-500'}"></div>
+                <div class="relative pt-1">
+                    <button onclick="toggleStatus('${item.id}')" class="absolute top-3 right-3 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider backdrop-blur-md border transition-all shadow-lg ${item.status === 'done' ? 'bg-primary/80 border-primary text-background' : 'bg-black/60 border-white/20 text-white hover:bg-primary hover:border-primary'}">
+                        <i data-lucide="${item.status === 'done' ? 'check-circle-2' : 'circle'}" class="w-3.5 h-3.5"></i>
+                        <span>${item.status === 'done' ? '已讀' : '標記已讀'}</span>
+                    </button>
+                </div>
+                <div class="p-6">
+                    <p class="text-base leading-relaxed whitespace-pre-wrap mb-5 font-normal ${item.status === 'done' ? 'text-muted line-through' : 'text-foreground'}">${item.content}</p>
+                    <div class="flex items-center justify-between pt-4 border-t border-border/50">
+                        <div class="flex flex-col gap-1">
+                            <span class="text-[11px] uppercase tracking-widest text-primary font-mono">心情 / ${item.category}</span>
+                            <span class="text-[10px] text-muted">${new Date(item.createdAt).toLocaleDateString()}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+            return div;
+        }
+
+        function renderFilters() {
+            // 分類篩選按鈕
+            const catContainer = document.getElementById('category-filters');
+            catContainer.innerHTML = '';
+            CONFIG.CATEGORIES.forEach(cat => {
+                const isActive = state.filterCat === cat;
+                const btn = document.createElement('button');
+                btn.className = `text-sm cursor-pointer transition-all relative pb-2 whitespace-nowrap px-1 ${isActive ? 'text-foreground font-bold' : 'text-muted hover:text-foreground'}`;
+                btn.innerHTML = `${cat === "全部" ? "全部心情" : cat}${isActive ? '<div class="absolute bottom-0 left-0 w-full h-[3px] rounded-full bg-primary shadow-[0_0_8px_rgba(187,134,252,0.4)]"></div>' : ''}`;
+                btn.onclick = () => { state.filterCat = cat; renderList(); };
+                catContainer.appendChild(btn);
+            });
+
+            // 狀態篩選按鈕樣式更新
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                const f = btn.getAttribute('data-filter');
+                if (f === state.filterStatus) {
+                    btn.className = "filter-btn px-3 py-1.5 rounded-md text-xs font-bold transition-all bg-primary text-background";
+                } else {
+                    btn.className = "filter-btn px-3 py-1.5 rounded-md text-xs font-bold transition-all text-muted hover:text-foreground hover:bg-white/5";
+                }
+            });
+        }
+
+        function renderModalPicker() {
+            const picker = document.getElementById('modal-category-picker');
+            picker.innerHTML = '';
+            CONFIG.CATEGORIES.filter(c => c !== "全部").forEach(cat => {
+                const isActive = state.selectedCat === cat;
+                const btn = document.createElement('button');
+                btn.className = `px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all border ${isActive ? 'bg-primary/20 border-primary text-primary scale-110 shadow-lg' : 'bg-white/5 border-transparent text-muted hover:bg-white/10'}`;
+                btn.textContent = cat;
+                btn.onclick = () => { state.selectedCat = cat; renderModalPicker(); };
+                picker.appendChild(btn);
+            });
+        }
+
+        // --- 互動邏輯 ---
+
+        function toggleModal(show) {
+            document.getElementById('mood-modal').classList.toggle('hidden', !show);
+            if(show) renderModalPicker();
+        }
+
+        function setStatusFilter(s) {
+            state.filterStatus = s;
+            renderList();
+        }
+
+        function handleCreate() {
+            const contentInput = document.getElementById('input-content');
+            const content = contentInput.value.trim();
+            if (!content) return;
+
+            // 符合要求的 Data Schema
+            const newRecord = {
+                id: Date.now() + "_" + Math.random().toString(36).slice(2,6),
+                createdAt: new Date().toISOString(),
+                content: content,
+                category: state.selectedCat,
+                status: "active" // 預設 "active"
+            };
+
+            saveData(newRecord);
+            contentInput.value = '';
+            toggleModal(false);
+            renderList();
+        }
+
+        function toggleStatus(id) {
+            const records = loadData();
+            const index = records.findIndex(r => r.id === id);
+            if (index > -1) {
+                records[index].status = records[index].status === 'active' ? 'done' : 'active';
+                localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(records));
+                renderList();
+            }
+        }
+
+        // 初始化
+        window.onload = () => {
+            renderList();
+            lucide.createIcons();
+        };
+    </script>
+</body>
+</html>
