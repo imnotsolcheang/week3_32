@@ -162,11 +162,24 @@
             CATEGORIES: ["全部", "非常好", "很好", "普通", "不好"]
         };
 
+        // ★★★ 請將這行替換成你的 Apps Script 網頁應用程式網址 ★★★
+        const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx4pcQqhEYzPoDVUHLVRv8uvo44Qx-H7p29kvDpUVgY8cF4NrYRPN5TVAFN3ctm6EkT/exec";
+
         let state = {
             filterCat: "全部",
             filterStatus: "all",
             selectedCat: "很好"
         };
+
+        // --- 同步到 Google Sheet（完全不會影響本機 UI） ---
+        function syncToSheet(payload) {
+            if (APPS_SCRIPT_URL === "PASTE_YOUR_APPS_SCRIPT_URL_HERE") return;
+            fetch(APPS_SCRIPT_URL, {
+                method: "POST",
+                headers: { "Content-Type": "text/plain" },
+                body: JSON.stringify(payload)
+            }).catch(err => console.warn("Sync to Sheet failed:", err));
+        }
 
         // --- 核心函式 (依照要求命名) ---
 
@@ -175,6 +188,8 @@
             const records = loadData();
             records.unshift(newRecord);
             localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(records));
+            // 🔄 同步至 Google Sheet
+            syncToSheet({ action: "create", record: newRecord });
         }
 
         /** 讀取資料：從 localStorage 取得陣列 */
@@ -328,8 +343,11 @@
             const records = loadData();
             const index = records.findIndex(r => r.id === id);
             if (index > -1) {
-                records[index].status = records[index].status === 'active' ? 'done' : 'active';
+                const newStatus = records[index].status === 'active' ? 'done' : 'active';
+                records[index].status = newStatus;
                 localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(records));
+                // 🔄 同步至 Google Sheet (只傳送改變的欄位)
+                syncToSheet({ action: "update", id: id, changes: { status: newStatus } });
                 renderList();
             }
         }
